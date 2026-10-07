@@ -5,14 +5,11 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -34,15 +31,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Refresh market snapshot when a key is configured
+        env:
+          SUGRA_API_KEY: ${{ secrets.SUGRA_API_KEY }}
+        run: |
+          if [ -n "$SUGRA_API_KEY" ]; then
+            npm run refresh:history || echo "History refresh unavailable; retaining saved history."
+            npm run refresh:data || echo "Refresh unavailable; deploying the checked-in snapshot."
+          else
+            echo "Using the checked-in market snapshot."
+          fi
+
       - name: Build site
         run: npm run build
+
+      - name: Support direct detail URLs
+        run: cp dist/index.html dist/404.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Vite's build output dir (CRA used ./build)
           path: ./dist
-  
+
   deploy:
     needs: build
 
@@ -51,7 +61,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-      
+
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
